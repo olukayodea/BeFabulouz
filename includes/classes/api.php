@@ -3,45 +3,39 @@
 		function prep($array, $raw_data) {
 			// get all api url variables
 			$data = explode("/", $array);
-			$key = $data[0];
-			$response = strtolower($data[1]);
-			$mode = strtolower($data[2]);
-			$action = strtolower($data[3]);
-			$string = @strtolower($data[4]);
+			$http_username = $data[0];
+			$http_secret = $data[1];
+			$response = strtolower($data[2]);
+			$mode = strtolower($data[3]);
+			$action = strtolower($data[4]);
+			$string = @strtolower($data[5]);
+
+			global $users;
 			
 			//get additional data			
-			$return = false;
+			$returnApi = false;
 			if ($response == "xml") {
 				$app_data = simplexml_load_string($raw_data);
-				$product_key =(string) $app_data->product_key;
-				$product_id =(string) $app_data->product_id;
+				$content_username =(string) $app_data->username;
+				$content_secret =(string) $app_data->secret;
 				$product_ver =(string) $app_data->product_ver;
 			} else if ($response == "json") {
 				$app_data = json_decode($raw_data, true);
-				$product_key = $app_data['product_key'];
-				$product_id = $app_data['product_id'];
+				$content_username = $app_data['username'];
+				$content_secret = $app_data['secret'];
 				$product_ver = $app_data['product_ver'];
 			} else {
 				$return['header']['status'] = "ERROR";
-				$return['header']['code'] = "120";
-				$return = true;
+				$return['header']['description'] = "Bad Request";
+				$return['header']['code'] = "400";
+				$returnApi = true;
 			}
-
-			global $users;
-			global $payments;
-			global $payouts;
-			global $advert_refresh;
-			global $advert_stat;
-			global $reward;
-			global $refer;
-			global $country;
-			global $categories;
 			
 			//check product version
 			//if (product_ver <= $product_ver) {
 				//authenticate user
-				if ($return == false) {	
-					if ($this->authenticate($key, $product_key, $product_id)) {
+				if ($returnApi == false) {	
+					if ($this->authenticate($http_username, $http_secret, $content_username, $content_secret)) {
 						switch ($mode) {
 							case "users":
 								switch ($action) {
@@ -50,42 +44,26 @@
 											$array_data['email'] = (string) $app_data->user->email;
 											$array_data['password'] = (string) $app_data->user->password;
 										} else if ($response == "json") {
-											$array_data = $app_data['user'];
+											$array_data = $app_data;
 										}
 										$login = $users->login($array_data);
 										if ($login == 0) {
 											$return['header']['status'] = "ERROR";
-											$return['header']['code'] = "107";
+											$return['header']['description'] = "Login failed";
+											$return['header']['code'] = "451";
 										} else if ($login == 1) {
 											$return['header']['status'] = "ERROR";
-											$return['header']['code'] = "108";
+											$return['header']['description'] = "Account inactive";
+											$return['header']['code'] = "452";
 										} else if ($login == 3) {
 											$return['header']['status'] = "ERROR";
-											$return['header']['code'] = "109";
+											$return['header']['description'] = "Account Suspended";
+											$return['header']['code'] = "453";
 										} else {
 											$return['header']['status'] = 'DONE';
 											$return['header']['code'] = "200";
 											$return['header']['completedTime'] = date('l jS \of F Y h:i:s A');
-											$getDetails = $users->listAccount($login['id']);
-											$curent_balance = ceil($payments->currentEarnings($login['id']));
-											$total_earnings = ceil($payments->totalEarnings($login['id']));
-											$total_payout =  ceil($payouts->total($login['id']));
-											if ($getDetails == false) {
-												$getDetails['ref'] = "";
-												$getDetails['user'] = "";
-												$getDetails['bank'] = "";
-												$getDetails['account'] = "";
-												$getDetails['sort_code'] = "";
-												$getDetails['account_name'] = "";
-												$getDetails['pay_stack_token'] = "";
-												$getDetails['validated'] = "";
-												$getDetails['skip'] = "";
-											}
-											$return['body']['id'] = $login;
-											$return['body']['curent_balance'] = round($curent_balance, 2);
-											$return['body']['total_earnings'] = round($total_earnings, 2);
-											$return['body']['total_payout'] = round($total_payout, 2);
-											$return['body']['account'] = $getDetails;
+											$return['body'] = $login;
 										}
 										break;
 									case "register":
@@ -94,12 +72,9 @@
 											$array_data['other_names'] = (string) $app_data->user->other_names;
 											$array_data['email'] = (string) $app_data->user->email;
 											$array_data['password'] = (string) $app_data->user->password;
-											$array_data['phone'] =  (string) $app_data->user->phone;
-											$array_data['preference'] = (string) $app_data->user->preference;
-											$array_data['ageRange'] = (string) $app_data->user->ageRange;
 											$array_data['gender'] = (string) $app_data->user->gender;
 										} else if ($response == "json") {
-											$array_data = $app_data['user'];
+											$array_data = $app_data;
 										}
 										
 										$register = $users->create($array_data);
@@ -107,10 +82,12 @@
 											$return['header']['status'] = 'DONE';
 											$return['header']['code'] = "200";
 											$return['header']['completedTime'] = date('l jS \of F Y h:i:s A');
+											$return['header']['message'] = "Account created, registration email sent to user";
 											$return['body']['id'] = $register;
 										} else {
 											$return['header']['status'] = "ERROR";
-											$return['header']['code'] = "106";
+											$return['header']['description'] = "Registration failed";
+											$return['header']['code'] = "450";
 										}
 										break;
 									case "getdetails":
@@ -128,19 +105,17 @@
 											$return['body']['userData'] = $getDetails;
 										} else {
 											$return['header']['status'] = "ERROR";
-											$return['header']['code'] = "116";
+											$return['header']['description'] = "User not found";
+											$return['header']['code'] = "454";
 										}
 										break;	
 									case "updatedetails":
 										if ($response == "xml") {
-											$array_data['id'] = (string) $app_data->user->id;
+											$array_data['users_id'] = (string) $app_data->user->users_id;
 											$array_data['last_name'] = (string) $app_data->user->last_name;
 											$array_data['other_names'] = (string) $app_data->user->other_names;
 											$array_data['email'] = (string) $app_data->user->email;
 											$array_data['password'] = (string) $app_data->user->password;
-											$array_data['phone'] =  (string) $app_data->user->phone;
-											$array_data['preference'] = (string) $app_data->user->preference;
-											$array_data['ageRange'] = (string) $app_data->user->ageRange;
 											$array_data['gender'] = (string) $app_data->user->gender;
 										} else if ($response == "json") {
 											$array_data = $app_data['user'];
@@ -154,7 +129,8 @@
 											$return['body']['id'] = $array_data['id'];
 										} else {
 											$return['header']['status'] = "ERROR";
-											$return['header']['code'] = "110";
+											$return['header']['description'] = "User details not updated";
+											$return['header']['code'] = "455";
 										}
 										break;
 									case "updatepassword":
@@ -176,9 +152,14 @@
 											$return['body']['id'] = $array_data['ref'];
 										} else {
 											$return['header']['status'] = "ERROR";
-											$return['header']['code'] = "118";
+											$return['header']['description'] = "User password not updated";
+											$return['header']['code'] = "456";
 										}
 										break;
+									default:
+										$return['header']['status'] = "ERROR";
+										$return['header']['description'] = "Action unacceptable";
+										$return['header']['code'] = "406";
 								}
 								break;
 							case "report":
@@ -204,10 +185,16 @@
 										break;
 									break;
 								}
+							default:
+								$return['header']['status'] = "ERROR";
+								$return['header']['description'] = "Mode unacceptable";
+								$return['header']['code'] = "406";
+
 						}
 					} else {
 						$return['header']['status'] = "ERROR";
-						$return['header']['code'] = "101";
+						$return['header']['description'] = "Unauthorized";
+						$return['header']['code'] = "401";
 					}
 				}
 			//} else {
@@ -215,20 +202,20 @@
 			//	$return['header']['code'] = "131";
 			//}
 			if ($response == "json") {
-				$this->dumpData($raw_data, json_encode($return));
-				return $this->convert_to_json($return);
+				return $this->convert_to_json($return, $return['header']['code']);
 			} else if ($response == "xml") {
-				return $this->convert_to_xml($return);
+				return $this->convert_to_xml($return, $return['header']['code']);
 			} else {
-				return  "WELCOME TO THE SKRINAD API, YOU HAVE DONE MANY THINGS WRONG THATS WHY YOU ARE SEEING THIS MESSAGE< PLEASE CHECK OUR API DOCUMENTATION OR CONTACT <a href=\"mailTo:info@SkrinAd.com\">SkrinAd Admin</a>";
+				return $this->convert_to_json($return, $return['header']['code']);
 			}
 		}
 		
-		function authenticate($key, $hash, $product_id) {
-			$keyHash = $hash+$product_id;
-			$hash_key = hash("sha256", $keyHash);
-			if ($hash_key == $key) {
-				return true;
+		function authenticate($username, $secret, $content_username, $content_secret) {
+			global $api_secret;
+			global $admin;
+			
+			if (($api_secret == $secret) && ($username == $content_username) && ($secret == $content_secret)) {
+				return $admin->authenticate($username);
 			} else {
 				return false;
 			}
@@ -241,8 +228,9 @@
 			$type = strtolower($type);
 		}
 		
-		function convert_to_json($data) {
+		function convert_to_json($data, $status) {
 			header('Content-type: application/json');
+			http_response_code($status);
 			echo json_encode($data);
 		}
 		
@@ -262,8 +250,9 @@
 			 return $xml;
 		}
 		
-		function convert_to_xml($data) {
+		function convert_to_xml($data, $status) {
 			header('Content-type: application/xml');
+			http_response_code($status);
 			header('Pragma: public');
 			header('Cache-control: private');
 			header('Expires: -1');

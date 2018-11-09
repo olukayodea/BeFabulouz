@@ -23,9 +23,9 @@
 		define("dbname", "befabulouz", true);
 	}
 	
-	define("limit", 20, true);
-	
 	include_once("classes/config.php");
+
+	$api_secret = sha1(base64_encode("TFHBybuymu7(9y8jbjmky678"));
 	
 	$config = new config;
 	$db = $config->connect();
@@ -35,4 +35,13 @@
 	include_once("classes/mailer/class.phpmailer.php");
 	include_once("classes/common.php");
 	$common = new common;
+
+	include_once("classes/alerts.php");
+	include_once("classes/admin.php");
+	include_once("classes/users.php");
+	include_once("classes/api.php");
+	$alerts = new alerts;
+	$admin = new admin;
+	$users = new users;
+	$api = new api;
 ?>

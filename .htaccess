@@ -13,6 +13,12 @@ RewriteRule ^(.*)$ $1.php
 IndexIgnore *
 </IfModule>
 
+<FilesMatch "\.(php)$">
+  <IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+  </IfModule>
+</FilesMatch>
+
 # Begin HackRepair.com Blacklist
 RewriteEngine on
 # Abuse Agent Blocking

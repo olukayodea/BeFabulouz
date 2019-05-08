@@ -24,7 +24,6 @@
 				echo "An Error occured! ".$ex->getMessage(); 
 			}
 			if ($sql->rowCount() == 1) {
-				echo "yes";
 				$row = $sql->fetch(PDO::FETCH_ASSOC);
 				$status = $row['status'];
 				if ($status == "NEW") {
